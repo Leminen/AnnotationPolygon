@@ -22,7 +22,7 @@ function varargout = AnnotationTool(varargin)
 
 % Edit the above text to modify the response to help AnnotationTool
 
-% Last Modified by GUIDE v2.5 19-Dec-2017 09:22:38
+% Last Modified by GUIDE v2.5 20-Dec-2017 14:45:10
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -56,6 +56,9 @@ function AnnotationTool_OpeningFcn(hObject, eventdata, handles, varargin)
 handles.output = hObject;
 %set(handles.ax_image,'Units','pixels');
 
+handles.dirInput = '';
+handles.dirOutput = '';
+
 handles.fileNames = [];
 handles.idxImage = 1;
 handles.annotations = struct('filename',{},'folder',{}, 'polygon', {});
@@ -64,6 +67,7 @@ set(handles.pb_addPolygon,'Enable','off')
 set(handles.pb_updatePolygons,'Enable','off') 
 set(handles.pb_nextImage,'Enable','off') 
 set(handles.pb_prevImage,'Enable','off') 
+set(handles.pb_gotoImageXX,'Enable','off') 
 
 % Update handles structure
 guidata(hObject, handles);
@@ -89,7 +93,7 @@ function pb_loadFolder_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
-dirInput = uigetdir;
+dirInput = uigetdir(handles.dirInput);
 if dirInput == 0
     return
 end
@@ -98,6 +102,7 @@ fileNames = dir([dirInput, '/**/*.png']);
 if isempty(fileNames)
     h = errordlg('The selected folder does not contain any PNG images','Invalid folder')
 else
+    handles.dirInput = dirInput;
     handles.fileNames = fileNames;
     handles.idxImage = 1;
     
@@ -105,6 +110,7 @@ else
     set(handles.pb_updatePolygons,'Enable','on') 
     set(handles.pb_nextImage,'Enable','on') 
     set(handles.pb_prevImage,'Enable','on')
+    set(handles.pb_gotoImageXX,'Enable','on') 
 
     guidata(hObject,handles)
     displayImage(handles)
@@ -118,7 +124,7 @@ function pb_loadAnnotations_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 %uiopen('load');
-[filename, pathname] = uigetfile('*.mat','File Selector');
+[filename, pathname] = uigetfile(fullfile(handles.dirOutput,'*.mat'),'File Selector');
 if filename == 0
     return
 end
@@ -132,6 +138,7 @@ else
         h = errordlg({'The selected annotations have an invalid format',...
             'Must be a struct containing the fields: filename, folder, polygon'},'Invalid Annotation format')
     else
+        handles.dirOutput = pathname;
         handles.annotations = annotations;
         if exist('idxLatestImage','var')
             if idxLatestImage <= length(handles.fileNames)
@@ -153,12 +160,16 @@ function pb_saveAnnotations_Callback(hObject, eventdata, handles)
 annotations = handles.annotations;
 idxLatestImage = handles.idxImage;
 
-[filename, pathname] = uiputfile('annotation.mat','Save  As');
+[filename, pathname] = uiputfile(fullfile(handles.dirOutput,'annotation.mat'),'Save  As');
 if filename == 0
     return
 end
+
+handles.dirOutput = pathname;
 save(fullfile(pathname,filename),'annotations','idxLatestImage')
-% uisave({'annotations','idxLatestImage'},'annotation.mat')
+
+guidata(hObject,handles)
+displayImage(handles)
 
 
 % --- Executes on button press in pb_addPolygon.
@@ -167,11 +178,38 @@ function pb_addPolygon_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 axes(handles.ax_image);
-handlePolygon = impoly(gca);
-if isempty(handlePolygon )
-    return
+
+rbHandle = get(handles.rbg_annotationMode,'SelectedObject');
+rbSelected = get(rbHandle,'String');
+if strcmp(rbSelected,'Man. Polygon')
+    handlePolygon = impoly(gca);
+    if isempty(handlePolygon )
+        return
+    end
+    pos = getPosition(handlePolygon);
+    
+elseif strcmp(rbSelected, 'Diagonal')
+    handleLine = imline(gca);
+    if isempty(handleLine )
+        return
+    end
+    tempPos = getPosition(handleLine);
+    center = sum(tempPos,1)/2;
+    v = tempPos(1,:)-center;
+    u =fliplr(v).*[1,-1];
+    poly = [tempPos(1,:);center+u;tempPos(2,:);center-u];
+    handlePolygon = impoly(gca, poly);
+    pos = handlePolygon.getPosition();
+    
+else
+    
 end
-pos = getPosition(handlePolygon);
+
+% handlePolygon = impoly(gca);
+% if isempty(handlePolygon )
+%     return
+% end
+% pos = getPosition(handlePolygon);
 
 file = handles.fileNames(handles.idxImage);
 idxMatch = strcmp({handles.annotations.filename}, file.name);
@@ -212,6 +250,7 @@ end
 guidata(hObject,handles)
 
 
+
 % --- Executes on button press in pb_nextImage.
 function pb_nextImage_Callback(hObject, eventdata, handles)
 % hObject    handle to pb_nextImage (see GCBO)
@@ -219,6 +258,7 @@ function pb_nextImage_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 pb_updatePolygons_Callback(hObject, eventdata, handles)
+handles = guidata(hObject);
 
 newIdx = handles.idxImage +1;
 if newIdx > length(handles.fileNames)
@@ -236,11 +276,41 @@ function pb_prevImage_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
-pb_updatePolygons_Callback(hObject, eventdata, handles)
+
+%AnnotationTool('pb_updatePolygons_Callback',handles.pb_updatePolygons,[],handles)
+
+pb_updatePolygons_Callback(hObject, eventdata, handles);
+handles = guidata(hObject);
 
 newIdx = handles.idxImage - 1;
 if newIdx < 1
     h = errordlg('You are already inspecting the first image','Image index out of range')
+elseif newIdx > length(handles.fileNames)
+    h = errordlg('The image index exceeded the number of images in the selected folder','Image index out of range')
+else
+    handles.idxImage = newIdx;
+    guidata(hObject,handles)
+    displayImage(handles)
+end
+
+
+% --- Executes on button press in pb_gotoImageXX.
+function pb_gotoImageXX_Callback(hObject, eventdata, handles)
+% hObject    handle to pb_gotoImageXX (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+pb_updatePolygons_Callback(hObject, eventdata, handles)
+handles = guidata(hObject);
+
+x = inputdlg('Enter an image number to navigate to:',...
+             'Image number selector', [1 40]);
+newIdx = str2num(x{:}); 
+
+if newIdx > length(handles.fileNames)
+    h = errordlg('The image index exceeded the number of images in the selected folder','Image index out of range')
+elseif isempty(newIdx)
+    h = errordlg({'The entered image index is invalid.','Must be an integer value'},'Invavid image index')
 else
     handles.idxImage = newIdx;
     guidata(hObject,handles)
