@@ -67,7 +67,7 @@ set(handles.pb_addPolygon,'Enable','off')
 set(handles.pb_updatePolygons,'Enable','off') 
 set(handles.pb_nextImage,'Enable','off') 
 set(handles.pb_prevImage,'Enable','off') 
-set(handles.pb_gotoImageXX,'Enable','off') 
+set(handles.pb_gotoImageXX,'Enable','off')
 
 % Update handles structure
 guidata(hObject, handles);
@@ -181,14 +181,8 @@ axes(handles.ax_image);
 
 rbHandle = get(handles.rbg_annotationMode,'SelectedObject');
 rbSelected = get(rbHandle,'String');
-if strcmp(rbSelected,'Man. Polygon')
-    handlePolygon = impoly(gca);
-    if isempty(handlePolygon )
-        return
-    end
-    pos = getPosition(handlePolygon);
-    
-elseif strcmp(rbSelected, 'Diagonal')
+
+if strcmp(rbSelected, 'Diagonal')
     handleLine = imline(gca);
     if isempty(handleLine )
         return
@@ -201,15 +195,33 @@ elseif strcmp(rbSelected, 'Diagonal')
     handlePolygon = impoly(gca, poly);
     pos = handlePolygon.getPosition();
     
+elseif strcmp(rbSelected, 'Rectangle')
+    handleRect = imrect(gca);
+    if isempty(handleRect)
+        return
+    end
+    tempPos = getPosition(handleRect);
+    poly = [tempPos(1),tempPos(2);...
+           tempPos(1),tempPos(2)+tempPos(4);...
+           tempPos(1)+tempPos(3),tempPos(2)+tempPos(4);...
+           tempPos(1)+tempPos(3), tempPos(2)];
+    handlePolygon = impoly(gca, poly);
+    pos = handlePolygon.getPosition();
+    
+elseif strcmp(rbSelected,'Man. Polygon')
+    handlePolygon = impoly(gca);
+    if isempty(handlePolygon )
+        return
+    end
+    pos = getPosition(handlePolygon);
+ 
 else
     
 end
 
-% handlePolygon = impoly(gca);
-% if isempty(handlePolygon )
-%     return
-% end
-% pos = getPosition(handlePolygon);
+% Sort cornors to alway start with the most top right cornor
+[~,idxMin] = min(sqrt(sum(pos.^2,2)));
+pos = circshift(pos,1-idxMin,1);
 
 file = handles.fileNames(handles.idxImage);
 idxMatch = strcmp({handles.annotations.filename}, file.name);
