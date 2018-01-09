@@ -9,4 +9,6 @@ The tool currently support annotation of the following shapes:
 
 The tool takes a folder containing images as input and output a struct containing filename, filepath (local) and annotated polygons. The tool supports annotation of multiple annotations in the same image.
 
+
+The following image shows a snapshot of the tool:
 ![Screenshot](https://github.com/Leminen/AnnotationPolygon/blob/master/images/snapshot.png)
